@@ -15,12 +15,6 @@ public class Main {
         keyGen.initialize(2048);
         KeyPair keyPair = keyGen.generateKeyPair();
 
-        // Encrypt Data
-        String data = "Hello Bouncy Castle!";
-        byte[] encryptedData = Encryption.encrypt(data, keyPair.getPublic());
-        System.out.println(encryptedData.toString());
-        // Decrypt Data
-        String decryptedData = Decryption.decrypt(encryptedData, keyPair.getPrivate());
-        System.out.println("Decrypted Data: " + decryptedData);
+
     }
 }
