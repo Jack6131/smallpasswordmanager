@@ -3,15 +3,23 @@ package org.example;
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.bouncycastle.crypto.params.Argon2Parameters;
 
+import java.io.ByteArrayOutputStream;
 import java.io.Console;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
 import static org.example.Encryption.encrypt;
 
+
 public class GenerateAccount {
+    private static final Path VAULT = Path.of("vault.dat");
+    private static final byte[] MAGIC = { 'V', 'L', 'T', '1' };
     private boolean checkPassword(char [] password){
         boolean hasNumber=false;
         boolean hasLetter=false;
@@ -36,15 +44,15 @@ public class GenerateAccount {
 
 
     private char[] masterPasswordSetUp(){
-        Console console= System.console();
-        char[] PasswordInitialization=console.readPassword("Create Master Password \n Rules For Password:\n \t 1.Password Must Contain a Number and Letter\n \t 2.Must be MORE than 12 Characters\n \t 3.NO Whitespace \n Enter Password:");
-        char[] ValidatePassword = console.readPassword("Confirm Password:");
-        while (!Arrays.equals(PasswordInitialization,ValidatePassword)&& checkPassword(PasswordInitialization)){
-            console.printf("Passwords don't match or did not follow the rules!\n Try Again!");
+        Console consol= System.console();
+        char[] PasswordInitialization=consol.readPassword("Create Master Password \nRules For Password:\n \t1.Password Must Contain a Number and Letter\n \t2.Must be MORE than 12 Characters\n \t3.NO Whitespace \nEnter Password:");
+        char[] ValidatePassword = consol.readPassword("Confirm Password:");
+        while (!Arrays.equals(PasswordInitialization,ValidatePassword)|| !checkPassword(PasswordInitialization)){
+            consol.printf("Passwords don't match or did not follow the rules!\nTry Again!\n");
             Arrays.fill(PasswordInitialization, '\0');
             Arrays.fill(ValidatePassword, '\0');
-            PasswordInitialization=console.readPassword("Create Master Password");
-            ValidatePassword = console.readPassword("Confirm Password:");
+            PasswordInitialization=consol.readPassword("Create Master Password:");
+            ValidatePassword = consol.readPassword("Confirm Password:");
         }
         return PasswordInitialization;
     }
@@ -76,7 +84,10 @@ public class GenerateAccount {
             byte [] base = new byte[12];
             new SecureRandom().nextBytes(base);
             byte[] encrypted= encrypt("[]".getBytes(StandardCharsets.UTF_8),key,base);
+            writeVaultFile(salt,base,encrypted);
         } catch (GeneralSecurityException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
             Arrays.fill(key, (byte) 0);
@@ -84,6 +95,26 @@ public class GenerateAccount {
     }finally {
             Arrays.fill(password, '\0');
         }
+    }
+    private static void writeVaultFile(byte[] salt, byte[] nonce, byte[] ciphertext)
+            throws IOException {
+
+        Path temp = Path.of("vault.dat.tmp");
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        output.write(MAGIC);
+        output.write(salt);
+        output.write(nonce);
+        output.write(ciphertext);
+
+        Files.write(temp, output.toByteArray());
+
+        Files.move(
+                temp,
+                VAULT,
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE
+        );
     }
 
    public void generateAccount(){

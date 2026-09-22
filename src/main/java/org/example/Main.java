@@ -7,14 +7,10 @@ import java.security.Security;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class Main {
+
     public static void main(String[] args) throws Exception {
-        Security.addProvider(new BouncyCastleProvider());
-
-        // Key Generation
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA", "BC");
-        keyGen.initialize(2048);
-        KeyPair keyPair = keyGen.generateKeyPair();
-
+        GenerateAccount start= new GenerateAccount();
+        start.generateAccount();
 
     }
 }
