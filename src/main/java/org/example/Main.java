@@ -17,11 +17,11 @@ import static org.example.GenerateAccount.addWords;
 import static org.example.GenerateAccount.readVaultFile;
 
 public class Main {
-    private static final Path VAULT = Path.of("vault.dat");
+
 
 
     public static void start(Console console,GenerateAccount start) throws Exception {
-        if (Files.exists(VAULT)) {
+        if (Files.exists(VaultPaths.INDEX_FILE)) {
             console.printf("Existing vault found.%n");
             start.signIn(console);
         } else {
@@ -33,5 +33,6 @@ public class Main {
         Console consol= System.console();
         GenerateAccount start= new GenerateAccount();
         start(consol,start);
+
     }
 }

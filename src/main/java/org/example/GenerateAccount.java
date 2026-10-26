@@ -18,73 +18,122 @@ import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.HexFormat;
 
 import static org.example.Encryption.encrypt;
 
-
 public class GenerateAccount {
 
-    private static final Path VAULT = Path.of("vault.dat");
-    private static final byte[] MAGIC = { 'V', 'L', 'T', '1' };
-    public static void addWords(char[] entry, char[] masterPassword)
-            throws IOException, GeneralSecurityException {
+    public record IndexEntry(String id, String service) {}
 
-        VaultFile vault = readVaultFile();
+
+    private static final byte[] MAGIC = { 'V', 'L', 'T', '1' };
+
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    //makes a random id to link the index file with a vault file in the entries directory so it knows where to look for your password
+    private static String generateEntryId() {
+        byte[] bytes = new byte[16]; // 128-bit ID
+        RANDOM.nextBytes(bytes);
+
+        try {
+            return HexFormat.of().formatHex(bytes);
+        } finally {
+            Arrays.fill(bytes, (byte) 0);
+        }
+    }
+    public static void addWords(
+            char[] indexEntryJson,
+            char[] entryPassword,
+            char[] masterPassword
+    ) throws IOException, GeneralSecurityException {
+
+        VaultFile vault = readVaultFile(VaultPaths.INDEX_FILE);
 
         byte[] key = null;
         byte[] oldPlaintext = null;
-        byte[] updatedPlaintext = null;
-        byte[] ciphertext = null;
-        byte[] newNonce = new byte[12];
+        byte[] updatedIndexPlaintext = null;
+        byte[] entryPlaintext = null;
+        byte[] indexCiphertext = null;
+        byte[] entryCiphertext = null;
+
+        byte[] indexNonce = new byte[12];
+        byte[] entryNonce = new byte[12];
+
+        String id = generateEntryId();
 
         try {
             key = generateKey(masterPassword, vault.salt());
 
-            // Validates password and retrieves existing vault data
-            oldPlaintext = Decryption.decrypt(
-                    vault.ciphertext(),
-                    key,
-                    vault.nonce()
-            );
+            oldPlaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
 
             String existing = new String(oldPlaintext, StandardCharsets.UTF_8);
-            String newEntry = new String(entry);
+            String newIndexJson = ("{id:"+id+",service:"+new String(indexEntryJson)+"}");
 
+            String updatedIndexJson = existing.equals("[]")
+                    ? "[" + newIndexJson + "]"
+                    : existing.substring(0, existing.length() - 1)
+                    + "," + newIndexJson + "]";
 
-            String updated;
-            if (existing.equals("[]")) {
-                updated = "[" + newEntry + "]";
-            } else {
-                updated = existing.substring(0, existing.length() - 1)
-                        + "," + newEntry + "]";
-            }
+            updatedIndexPlaintext =
+                    updatedIndexJson.getBytes(StandardCharsets.UTF_8);
 
-            updatedPlaintext = updated.getBytes(StandardCharsets.UTF_8);
+            entryPlaintext = StandardCharsets.UTF_8.encode(
+                    java.nio.CharBuffer.wrap(entryPassword)
+            ).array();
 
+            SecureRandom random = new SecureRandom();
+            random.nextBytes(indexNonce);
+            random.nextBytes(entryNonce);
 
-            new SecureRandom().nextBytes(newNonce);
+            entryCiphertext = encrypt(entryPlaintext, key, entryNonce);
 
-            ciphertext = encrypt(updatedPlaintext, key, newNonce);
+            writeVaultFile(
+                    VaultPaths.entryFile(id),
+                    vault.salt(),
+                    entryNonce,
+                    entryCiphertext
+            );
 
-            writeVaultFile(vault.salt(), newNonce, ciphertext);
+            indexCiphertext = encrypt(updatedIndexPlaintext, key, indexNonce);
 
+            writeVaultFile(
+                    VaultPaths.INDEX_FILE,
+                    vault.salt(),
+                    indexNonce,
+                    indexCiphertext
+            );
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
-            Arrays.fill(entry, '\0');
+            Arrays.fill(indexEntryJson, '\0');
+            Arrays.fill(entryPassword, '\0');
             Arrays.fill(masterPassword, '\0');
 
-            if (key != null) Arrays.fill(key, (byte) 0);
-            if (oldPlaintext != null) Arrays.fill(oldPlaintext, (byte) 0);
-            if (updatedPlaintext != null) Arrays.fill(updatedPlaintext, (byte) 0);
-            if (ciphertext != null) Arrays.fill(ciphertext, (byte) 0);
+            wipe(key);
+            wipe(oldPlaintext);
+            wipe(updatedIndexPlaintext);
+            wipe(entryPlaintext);
+            wipe(indexCiphertext);
+            wipe(entryCiphertext);
+            wipe(indexNonce);
+            wipe(entryNonce);
 
-            Arrays.fill(newNonce, (byte) 0);
-            Arrays.fill(vault.salt(), (byte) 0);
-            Arrays.fill(vault.nonce(), (byte) 0);
-            Arrays.fill(vault.ciphertext(), (byte) 0);
+            wipe(vault.salt());
+            wipe(vault.nonce());
+            wipe(vault.ciphertext());
         }
     }
+
+    //clears data after its passed its usage so it cant be accessed illegally later
+    private static void wipe(byte[] data) {
+        if (data != null) {
+            Arrays.fill(data, (byte) 0);
+        }
+    }
+
+    //just some simple password rules
     private boolean checkPassword(char [] password){
         boolean hasNumber=false;
         boolean hasLetter=false;
@@ -108,6 +157,7 @@ public class GenerateAccount {
     }
 
 
+    //asks you to generate a password that will be used as the basis of your vault file
     private char[] masterPasswordSetUp(Console consol){
 
         char[] PasswordInitialization=consol.readPassword("Create Master Password \nRules For Password:\n \t1.Password Must Contain a Number and Letter\n \t2.Must be MORE than 12 Characters\n \t3.NO Whitespace \nEnter Password:");
@@ -121,6 +171,9 @@ public class GenerateAccount {
         }
         return PasswordInitialization;
     }
+
+
+    //takes a given password and genenrates a key that will be used for encryption
     private static byte[] generateKey(char[] password, byte[] salt){
         byte[] passwordBytes = new String(password).getBytes(StandardCharsets.UTF_8);
         try{
@@ -140,7 +193,9 @@ public class GenerateAccount {
             Arrays.fill(passwordBytes,(byte) 0);
         }
     }
-    private void encryptPassword(char [] password){
+
+    //using master password generates a key that then will be used to write a vault file that will store the encrypted plain text
+    private void encryptPassword(Path target,char [] password){
         try{
         byte[]salt = new byte[16];
         new SecureRandom().nextBytes(salt);
@@ -149,7 +204,7 @@ public class GenerateAccount {
             byte [] base = new byte[12];
             new SecureRandom().nextBytes(base);
             byte[] encrypted= encrypt("[]".getBytes(StandardCharsets.UTF_8),key,base);
-            writeVaultFile(salt,base,encrypted);
+            writeVaultFile(target,salt,base,encrypted);
         } catch (GeneralSecurityException e) {
             throw new RuntimeException(e);
         } catch (IOException e) {
@@ -161,31 +216,43 @@ public class GenerateAccount {
             Arrays.fill(password, '\0');
         }
     }
-    private static void writeVaultFile(byte[] salt, byte[] nonce, byte[] ciphertext)
-            throws IOException {
 
-        Path temp = Path.of("vault.dat.tmp");
-
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        output.write(MAGIC);
-        output.write(salt);
-        output.write(nonce);
-        output.write(ciphertext);
-
-        Files.write(temp, output.toByteArray());
-
-        Files.move(
-                temp,
-                VAULT,
-                StandardCopyOption.REPLACE_EXISTING,
-                StandardCopyOption.ATOMIC_MOVE
+    //the physical writing of the vault file
+    private static void writeVaultFile(
+            Path target, byte[] salt, byte[] nonce, byte[] ciphertext
+    ) throws IOException {
+        Path temp = Files.createTempFile(
+                target.getParent(),
+                target.getFileName().toString(),
+                ".tmp"
         );
+
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            output.write(MAGIC);
+            output.write(salt);
+            output.write(nonce);
+            output.write(ciphertext);
+
+            Files.write(temp, output.toByteArray());
+
+            Files.move(
+                    temp,
+                    target,
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE
+            );
+        } finally {
+            Files.deleteIfExists(temp);
+        }
     }
+
     record VaultFile(byte[] salt, byte[] nonce, byte[] ciphertext) {}
 
 
-    public static VaultFile readVaultFile() throws IOException {
-        byte[] data = Files.readAllBytes(VAULT);
+    //returns the encrypted plain text of the vault file
+    public static VaultFile readVaultFile(Path p) throws IOException {
+        byte[] data = Files.readAllBytes(p);
 
         int headerLength = 4 + 16 + 12;
         int tagLength = 16;
@@ -208,17 +275,37 @@ public class GenerateAccount {
         return new VaultFile(salt, nonce, ciphertext);
     }
 
-    public void signIn(Console consol) throws Exception {
-        VaultFile vault= readVaultFile();
-        char[] Password=consol.readPassword("Enter in your password:");
-        byte[]key=generateKey(Password,vault.salt);
-        byte[] plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
-        System.out.println(new String(plaintext, StandardCharsets.UTF_8));
+    public void getPassword(){
 
     }
+
+    public void signIn(Console consol) throws Exception {
+        char[] Password=consol.readPassword("Enter in your password:");
+        byte[] key=null;
+        try{
+            VaultFile vault= readVaultFile(VaultPaths.INDEX_FILE);
+            key=generateKey(Password,vault.salt);
+            char[] index= "chicken2".toCharArray();
+            char[] pass= "password3".toCharArray();
+
+            byte[] plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
+            System.out.println(new String(plaintext, StandardCharsets.UTF_8));
+            addWords(index,pass,Password);
+        }
+        finally {
+            Arrays.fill(Password, '\0');
+
+            if (key != null) {
+                Arrays.fill(key, (byte) 0);
+            }
+    }
+    }
+
+
+    //Creates a Basic Vault File
    public void generateAccount(Console consol){
         char [] password = masterPasswordSetUp(consol);
-        encryptPassword(password);
+        encryptPassword(VaultPaths.INDEX_FILE,password);
 
 
     }
