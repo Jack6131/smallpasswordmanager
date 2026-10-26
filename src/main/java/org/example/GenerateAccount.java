@@ -69,7 +69,7 @@ public class GenerateAccount {
             oldPlaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
 
             String existing = new String(oldPlaintext, StandardCharsets.UTF_8);
-            String newIndexJson = ("{id:"+id+",service:"+new String(indexEntryJson)+"}");
+            String newIndexJson = ("{\"id\": \""+id+"\" ,\"service\": \""+new String(indexEntryJson)+"\"}");
 
             String updatedIndexJson = existing.equals("[]")
                     ? "[" + newIndexJson + "]"
@@ -285,8 +285,8 @@ public class GenerateAccount {
         try{
             VaultFile vault= readVaultFile(VaultPaths.INDEX_FILE);
             key=generateKey(Password,vault.salt);
-            char[] index= "chicken2".toCharArray();
-            char[] pass= "password3".toCharArray();
+            char[] index= "chicken3".toCharArray();
+            char[] pass= "password4".toCharArray();
 
             byte[] plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
             System.out.println(new String(plaintext, StandardCharsets.UTF_8));
