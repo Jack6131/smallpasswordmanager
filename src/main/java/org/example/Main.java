@@ -23,7 +23,7 @@ public class Main {
     public static void start(Console console,GenerateAccount start) throws Exception {
         if (Files.exists(VaultPaths.INDEX_FILE)) {
             console.printf("Existing vault found.%n");
-            start.signIn(console);
+            start.getPassword(console);
         } else {
             console.printf("No vault found. Creating one.%n");
             start.generateAccount(console);

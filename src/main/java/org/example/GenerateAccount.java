@@ -18,6 +18,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HexFormat;
 
 import static org.example.Encryption.encrypt;
@@ -69,12 +70,9 @@ public class GenerateAccount {
             oldPlaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
 
             String existing = new String(oldPlaintext, StandardCharsets.UTF_8);
-            String newIndexJson = ("{\"id\": \""+id+"\" ,\"service\": \""+new String(indexEntryJson)+"\"}");
+            String newIndexJson = ("{\"id\":\""+id+"\",\"service\":\""+new String(indexEntryJson)+"\"}");
 
-            String updatedIndexJson = existing.equals("[]")
-                    ? "[" + newIndexJson + "]"
-                    : existing.substring(0, existing.length() - 1)
-                    + "," + newIndexJson + "]";
+            String updatedIndexJson = existing+id+"\n"+new String(indexEntryJson)+"\n";
 
             updatedIndexPlaintext =
                     updatedIndexJson.getBytes(StandardCharsets.UTF_8);
@@ -203,7 +201,7 @@ public class GenerateAccount {
         try{
             byte [] base = new byte[12];
             new SecureRandom().nextBytes(base);
-            byte[] encrypted= encrypt("[]".getBytes(StandardCharsets.UTF_8),key,base);
+            byte[] encrypted= encrypt("".getBytes(StandardCharsets.UTF_8),key,base);
             writeVaultFile(target,salt,base,encrypted);
         } catch (GeneralSecurityException e) {
             throw new RuntimeException(e);
@@ -275,26 +273,68 @@ public class GenerateAccount {
         return new VaultFile(salt, nonce, ciphertext);
     }
 
-    public void getPassword(){
+    public void getPassword(Console consol)throws Exception{
+        HashMap<String, String> map = new HashMap<>();
+        char[] Password=consol.readPassword("Enter in your password:");
+        byte[] key=null;
+        byte [] plaintext=null;
+        String[]parts=null;
+        char[] search=null;
+        String stringText=null;
+        String mapText=null;
+        try{
+            VaultFile vault= readVaultFile(VaultPaths.INDEX_FILE);
+            key=generateKey(Password,vault.salt);
+            plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
+            stringText=new String(plaintext, StandardCharsets.UTF_8);
+            parts= stringText.split("\n");
+            for(int i =0 ;i<parts.length;i+=2){
+                map.put(parts[i+1],parts[i]);
+            }
+
+            search= consol.readPassword("enter in the serivce you want to search");
+            mapText =(map.get(String.valueOf(search)));
+
+            VaultFile passwordVault=readVaultFile(VaultPaths.entryFile(mapText));
+            plaintext = Decryption.decrypt(passwordVault.ciphertext(), key, passwordVault.nonce());
+            System.out.println(new String(plaintext, StandardCharsets.UTF_8));
+
+
+        }
+        finally {
+            Arrays.fill(Password, '\0');
+            Arrays.fill(search, '\0');
+            Arrays.fill(plaintext,(byte)0);
+            stringText="\0";
+            map=null;
+            mapText=null;
+            stringText=null;
+            Arrays.fill(parts,"\0");
+            if (key != null) {
+                Arrays.fill(key, (byte) 0);
+            }
+        }
 
     }
 
     public void signIn(Console consol) throws Exception {
         char[] Password=consol.readPassword("Enter in your password:");
         byte[] key=null;
+        byte [] plaintext= null;
         try{
+
             VaultFile vault= readVaultFile(VaultPaths.INDEX_FILE);
             key=generateKey(Password,vault.salt);
-            char[] index= "chicken3".toCharArray();
-            char[] pass= "password4".toCharArray();
+            char[] index= "chicken".toCharArray();
+            char[] pass= "password".toCharArray();
 
-            byte[] plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
+             plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
             System.out.println(new String(plaintext, StandardCharsets.UTF_8));
             addWords(index,pass,Password);
         }
         finally {
             Arrays.fill(Password, '\0');
-
+            Arrays.fill(plaintext,(byte)0);
             if (key != null) {
                 Arrays.fill(key, (byte) 0);
             }
