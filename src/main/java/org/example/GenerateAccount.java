@@ -276,7 +276,7 @@ public class GenerateAccount {
 
     public static void getPassword(Console consol)throws Exception{
         HashMap<String, String> map = new HashMap<>();
-        char[] Password=consol.readPassword("Enter in your password:");
+        char[] Password=consol.readPassword("Enter in your master password:");
         byte[] key=null;
         byte [] plaintext=null;
         String[]parts=null;
@@ -329,7 +329,7 @@ public class GenerateAccount {
             String[] parts= stringText.split("\n");
             stringText="\0";
             char[] index;
-            for(int i =0 ;i<parts.length;i+=2){
+            for(int i =0 ;i+1<parts.length;i+=2){
                 map.put(parts[i+1],parts[i]);
             }
             Arrays.fill(parts,"\0");
