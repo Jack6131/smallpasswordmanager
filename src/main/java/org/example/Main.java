@@ -20,19 +20,24 @@ public class Main {
 
 
 
-    public static void start(Console console,GenerateAccount start) throws Exception {
+    public static void start(Console console) throws Exception {
         if (Files.exists(VaultPaths.INDEX_FILE)) {
-            console.printf("Existing vault found.%n");
-            start.getPassword(console);
         } else {
             console.printf("No vault found. Creating one.%n");
-            start.generateAccount(console);
+            GenerateAccount.generateAccount(console);
         }
     }
     public static void main(String[] args) throws Exception {
         Console consol= System.console();
-        GenerateAccount start= new GenerateAccount();
-        start(consol,start);
+        start(consol);
+        switch (args[0]) {
+            case "add" -> GenerateAccount.addPassword(consol);
+            case "get" -> GenerateAccount.getPassword(consol);
+            default -> {
+                System.err.println("Unknown command: " + args[0]);
+                System.exit(1);
+            }
+        }
 
     }
 }

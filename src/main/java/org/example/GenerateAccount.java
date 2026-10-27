@@ -70,7 +70,8 @@ public class GenerateAccount {
             oldPlaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
 
             String existing = new String(oldPlaintext, StandardCharsets.UTF_8);
-            String newIndexJson = ("{\"id\":\""+id+"\",\"service\":\""+new String(indexEntryJson)+"\"}");
+            //This might be used for later if I ever want to do json formatting
+           // String newIndexJson = ("{\"id\":\""+id+"\",\"service\":\""+new String(indexEntryJson)+"\"}");
 
             String updatedIndexJson = existing+id+"\n"+new String(indexEntryJson)+"\n";
 
@@ -132,7 +133,7 @@ public class GenerateAccount {
     }
 
     //just some simple password rules
-    private boolean checkPassword(char [] password){
+    private static boolean checkPassword(char[] password){
         boolean hasNumber=false;
         boolean hasLetter=false;
         if(password.length<10){
@@ -156,7 +157,7 @@ public class GenerateAccount {
 
 
     //asks you to generate a password that will be used as the basis of your vault file
-    private char[] masterPasswordSetUp(Console consol){
+    private static char[] masterPasswordSetUp(Console consol){
 
         char[] PasswordInitialization=consol.readPassword("Create Master Password \nRules For Password:\n \t1.Password Must Contain a Number and Letter\n \t2.Must be MORE than 12 Characters\n \t3.NO Whitespace \nEnter Password:");
         char[] ValidatePassword = consol.readPassword("Confirm Password:");
@@ -193,7 +194,7 @@ public class GenerateAccount {
     }
 
     //using master password generates a key that then will be used to write a vault file that will store the encrypted plain text
-    private void encryptPassword(Path target,char [] password){
+    private static void encryptPassword(Path target, char[] password){
         try{
         byte[]salt = new byte[16];
         new SecureRandom().nextBytes(salt);
@@ -273,13 +274,13 @@ public class GenerateAccount {
         return new VaultFile(salt, nonce, ciphertext);
     }
 
-    public void getPassword(Console consol)throws Exception{
+    public static void getPassword(Console consol)throws Exception{
         HashMap<String, String> map = new HashMap<>();
         char[] Password=consol.readPassword("Enter in your password:");
         byte[] key=null;
         byte [] plaintext=null;
         String[]parts=null;
-        char[] search=null;
+        String search=null;
         String stringText=null;
         String mapText=null;
         try{
@@ -292,24 +293,22 @@ public class GenerateAccount {
                 map.put(parts[i+1],parts[i]);
             }
 
-            search= consol.readPassword("enter in the serivce you want to search");
+            search= consol.readLine("Enter in the serivce you want to search:");
             mapText =(map.get(String.valueOf(search)));
 
             VaultFile passwordVault=readVaultFile(VaultPaths.entryFile(mapText));
             plaintext = Decryption.decrypt(passwordVault.ciphertext(), key, passwordVault.nonce());
             System.out.println(new String(plaintext, StandardCharsets.UTF_8));
-
+            search="\0";
 
         }
         finally {
             Arrays.fill(Password, '\0');
-            Arrays.fill(search, '\0');
-            Arrays.fill(plaintext,(byte)0);
+
             stringText="\0";
             map=null;
             mapText=null;
             stringText=null;
-            Arrays.fill(parts,"\0");
             if (key != null) {
                 Arrays.fill(key, (byte) 0);
             }
@@ -317,36 +316,50 @@ public class GenerateAccount {
 
     }
 
-    public void signIn(Console consol) throws Exception {
-        char[] Password=consol.readPassword("Enter in your password:");
-        byte[] key=null;
-        byte [] plaintext= null;
+    public static void addPassword(Console consol) throws Exception {
+        char[] Password=consol.readPassword("Enter in your master password:");
+        HashMap<String, String> map = new HashMap<>();
         try{
-
             VaultFile vault= readVaultFile(VaultPaths.INDEX_FILE);
-            key=generateKey(Password,vault.salt);
-            char[] index= "chicken".toCharArray();
-            char[] pass= "password".toCharArray();
+            byte[] key=generateKey(Password,vault.salt);
+            byte[] plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
+            Arrays.fill(key,(byte)0);
+            String  stringText=new String(plaintext, StandardCharsets.UTF_8);
+            Arrays.fill(plaintext,(byte)0);
+            String[] parts= stringText.split("\n");
+            stringText="\0";
+            char[] index;
+            for(int i =0 ;i<parts.length;i+=2){
+                map.put(parts[i+1],parts[i]);
+            }
+            Arrays.fill(parts,"\0");
+            while(true){
+                index = consol.readLine("Enter the Service you want to add:").toCharArray();
 
-             plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
-            System.out.println(new String(plaintext, StandardCharsets.UTF_8));
+                if(!map.containsKey(new String(index))){
+                    break;
+                }
+                consol.printf("This service name has already been used please try again\n");
+            }
+            map=null;
+            char[] pass=consol.readPassword("Enter in the password for your account:");
             addWords(index,pass,Password);
+            Arrays.fill(index,'\0');
+            Arrays.fill(pass,'\0');
+
         }
         finally {
             Arrays.fill(Password, '\0');
-            Arrays.fill(plaintext,(byte)0);
-            if (key != null) {
-                Arrays.fill(key, (byte) 0);
-            }
+
     }
     }
 
 
     //Creates a Basic Vault File
-   public void generateAccount(Console consol){
+   public static void generateAccount(Console consol){
         char [] password = masterPasswordSetUp(consol);
         encryptPassword(VaultPaths.INDEX_FILE,password);
-
+        Arrays.fill(password,'\0');
 
     }
 }
