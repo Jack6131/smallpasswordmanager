@@ -1,34 +1,29 @@
 package org.example;
 
-import org.bouncycastle.crypto.InvalidCipherTextException;
-import org.bouncycastle.crypto.engines.AESEngine;
+
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
-import org.bouncycastle.crypto.modes.GCMBlockCipher;
-import org.bouncycastle.crypto.params.AEADParameters;
+
 import org.bouncycastle.crypto.params.Argon2Parameters;
-import org.bouncycastle.crypto.params.KeyParameter;
 
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.io.ByteArrayOutputStream;
 import java.io.Console;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HexFormat;
-import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-
-import static java.lang.Thread.sleep;
 import static org.example.Encryption.encrypt;
 
 public class GenerateAccount {
@@ -68,7 +63,6 @@ public class GenerateAccount {
     private static String generateEntryId() {
         byte[] bytes = new byte[16]; // 128-bit ID
         RANDOM.nextBytes(bytes);
-
         try {
             return HexFormat.of().formatHex(bytes);
         } finally {
@@ -80,9 +74,7 @@ public class GenerateAccount {
             char[] entryPassword,
             char[] masterPassword
     ) throws IOException, GeneralSecurityException {
-
         VaultFile vault = readVaultFile(VaultPaths.INDEX_FILE);
-
         byte[] key = null;
         byte[] oldPlaintext = null;
         byte[] updatedIndexPlaintext = null;
@@ -190,7 +182,7 @@ public class GenerateAccount {
     //asks you to generate a password that will be used as the basis of your vault file
     private static char[] masterPasswordSetUp(Console consol){
 
-        char[] PasswordInitialization=consol.readPassword("Create Master Password \nRules For Password:\n \t1.Password Must Contain a Number and Letter\n \t2.Must be MORE than 12 Characters\n \t3.NO Whitespace \nEnter Password:");
+        char[] PasswordInitialization=consol.readPassword("Create Master Password \nRules For Password:\n \t1.Password Must Contain a Number and Letter\n \t2.Must be MORE than 10 Characters\n \t3.NO Whitespace \nEnter Password:");
         char[] ValidatePassword = consol.readPassword("Confirm Password:");
         while (!Arrays.equals(PasswordInitialization,ValidatePassword)|| !checkPassword(PasswordInitialization)){
             consol.printf("Passwords don't match or did not follow the rules!\nTry Again!\n");
@@ -348,6 +340,86 @@ public class GenerateAccount {
         }
 
     }
+    public static void removePassword(Console console) throws Exception {
+        char[] masterPassword = console.readPassword("Enter master password: ");
+
+        VaultFile vault = null;
+        byte[] key = null;
+        byte[] plaintext = null;
+        byte[] updatedPlaintext = null;
+        byte[] ciphertext = null;
+        byte[] newNonce = new byte[12];
+
+        try {
+            vault = readVaultFile(VaultPaths.INDEX_FILE);
+            key = generateKey(masterPassword, vault.salt());
+
+            plaintext = Decryption.decrypt(vault.ciphertext(), key, vault.nonce());
+
+            String indexText = new String(plaintext, StandardCharsets.UTF_8);
+            String[] lines = indexText.split("\\R");
+
+            String serviceToRemove = console.readLine("Service to remove: ");
+            String idToRemove = null;
+
+            for (int i = 0; i + 1 < lines.length; i += 2) {
+                String id = lines[i];
+                String service = lines[i + 1];
+
+                if (service.equalsIgnoreCase(serviceToRemove)) {
+                    idToRemove = id;
+                    break;
+                }
+            }
+
+            if (idToRemove == null) {
+                System.out.println("No matching service found.");
+                return;
+            }
+
+            StringBuilder rebuilt = new StringBuilder();
+
+            for (int i = 0; i + 1 < lines.length; i += 2) {
+                String id = lines[i];
+                String service = lines[i + 1];
+
+                if (!id.equals(idToRemove)) {
+                    rebuilt.append(id).append('\n');
+                    rebuilt.append(service).append('\n');
+                }
+            }
+
+            updatedPlaintext = rebuilt.toString().getBytes(StandardCharsets.UTF_8);
+
+            RANDOM.nextBytes(newNonce);
+            ciphertext = encrypt(updatedPlaintext, key, newNonce);
+
+            writeVaultFile(
+                    VaultPaths.INDEX_FILE,
+                    vault.salt(),
+                    newNonce,
+                    ciphertext
+            );
+
+            Files.deleteIfExists(VaultPaths.entryFile(idToRemove));
+
+            System.out.println("Entry removed.");
+        } finally {
+            Arrays.fill(masterPassword, '\0');
+            wipe(key);
+            wipe(plaintext);
+            wipe(updatedPlaintext);
+            wipe(ciphertext);
+            wipe(newNonce);
+
+            if (vault != null) {
+                wipe(vault.salt());
+                wipe(vault.nonce());
+                wipe(vault.ciphertext());
+            }
+        }
+    }
+
 
     public static void addPassword(Console consol) throws Exception {
         char[] Password=consol.readPassword("Enter in your master password:");
