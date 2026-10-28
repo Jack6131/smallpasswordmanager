@@ -8,6 +8,9 @@ import org.bouncycastle.crypto.params.AEADParameters;
 import org.bouncycastle.crypto.params.Argon2Parameters;
 import org.bouncycastle.crypto.params.KeyParameter;
 
+import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.io.ByteArrayOutputStream;
 import java.io.Console;
 import java.io.IOException;
@@ -20,7 +23,12 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.concurrent.Executors;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static java.lang.Thread.sleep;
 import static org.example.Encryption.encrypt;
 
 public class GenerateAccount {
@@ -33,6 +41,29 @@ public class GenerateAccount {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+
+    private static void passwordToClipboard(char[] password) throws InterruptedException {
+        Clipboard clip = Toolkit.getDefaultToolkit().getSystemClipboard();
+        StringSelection stringSelection = new StringSelection("");
+        clip.setContents(new StringSelection(new String(password)),null);
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                clip.setContents(stringSelection,null);
+            }
+        }));
+        try{
+
+        Thread.sleep(30000);
+
+        clip.setContents(stringSelection, null);
+        }
+        catch(InterruptedException e){
+            Thread.currentThread().interrupt();
+            clip.setContents(stringSelection, null);
+
+        }
+    }
     //makes a random id to link the index file with a vault file in the entries directory so it knows where to look for your password
     private static String generateEntryId() {
         byte[] bytes = new byte[16]; // 128-bit ID
@@ -298,8 +329,10 @@ public class GenerateAccount {
 
             VaultFile passwordVault=readVaultFile(VaultPaths.entryFile(mapText));
             plaintext = Decryption.decrypt(passwordVault.ciphertext(), key, passwordVault.nonce());
-            System.out.println(new String(plaintext, StandardCharsets.UTF_8));
+            consol.printf("Password Copied to Clipboard for 30 seconds");
+            passwordToClipboard(new String(plaintext, StandardCharsets.UTF_8).toCharArray());
             search="\0";
+            Arrays.fill(plaintext,(byte) 0);
 
         }
         finally {
