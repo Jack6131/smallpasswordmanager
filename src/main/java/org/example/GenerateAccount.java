@@ -35,12 +35,30 @@ public class GenerateAccount {
 
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static String sanitizePassword(String pass) {
+        StringBuilder sb = new StringBuilder(pass.length());
+        pass.codePoints().forEach(prob -> {
+            if (Character.isISOControl(prob)) return;
+            if (Character.isWhitespace(prob)) return;
+            if (prob == 0x200B) return; // zero-width space
+            if (prob == 0x200C) return; // zero-width non-joiner
+            if (prob == 0x200D) return; // zero-width joiner
+            if (prob == 0xFEFF) return; // BOM
+            sb.appendCodePoint(prob);
+        });
+        return sb.toString();
+    }
 
 
     private static void passwordToClipboard(char[] password) throws InterruptedException {
         Clipboard clip = Toolkit.getDefaultToolkit().getSystemClipboard();
         StringSelection stringSelection = new StringSelection("");
-        clip.setContents(new StringSelection(new String(password)),null);
+        String pass=new String(password);
+        String editedPassword = sanitizePassword(pass);
+
+
+
+        clip.setContents(new StringSelection(editedPassword.stripTrailing()),null);
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
@@ -52,6 +70,7 @@ public class GenerateAccount {
         Thread.sleep(30000);
 
         clip.setContents(stringSelection, null);
+        pass="\0";
         }
         catch(InterruptedException e){
             Thread.currentThread().interrupt();
